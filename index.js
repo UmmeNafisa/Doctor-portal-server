@@ -4,11 +4,16 @@ const cors = require('cors');
 require('dotenv').config();
 const { MongoClient } = require('mongodb');
 const admin = require("firebase-admin");
+const ObjectId = require('mongodb').ObjectId;
+// const stripe = require('stripe')(process.env.STRIPE_SECRET);
+const fileUpload = require('express-fileupload');
+
 
 const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json())
+app.use(fileUpload());
 
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -42,6 +47,7 @@ async function run() {
         const database = client.db('doctor_portal')
         const appointmentCollection = database.collection('appointments')
         const usersCollection = database.collection('users')
+        const doctorsCollection = database.collection('doctors');
 
         app.get('/appointments', async (req, res) => {
             const email = req.query.email;
@@ -55,6 +61,43 @@ async function run() {
             res.json(appointments);
         })
 
+        // doctors api
+        app.get('/doctors', async (req, res) => {
+            const cursor = doctorsCollection.find({});
+            const doctors = await cursor.toArray();
+            res.json(doctors);
+        });
+
+        app.get('/doctors/:id', async (req, res) => {
+            const query = { _id: ObjectId(req.params.id) }
+            const doctor = await doctorsCollection.findOne(query);
+            res.json(doctor);
+        });
+
+        app.post('/doctors', async (req, res) => {
+            const name = req.body.name;
+            const email = req.body.email;
+            const pic = req.files.image;
+            const picData = pic.data;
+            const encodedPic = picData.toString('base64');
+            const imageBuffer = Buffer.from(encodedPic, 'base64');
+            const doctor = {
+                name,
+                email,
+                image: imageBuffer
+            }
+            const result = await doctorsCollection.insertOne(doctor);
+            res.json(result);
+        })
+
+
+        //for payment stripe
+        app.get('/appointments/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: ObjectId(id) };
+            const result = await appointmentsCollection.findOne(query);
+            res.json(result);
+        })
         app.post('/appointments', async (req, res) => {
             const appointment = req.body;
             const result = await appointmentCollection.insertOne(appointment)
